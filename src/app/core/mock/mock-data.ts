@@ -419,7 +419,7 @@ function createInitialState(): MockState {
     flaggedForReview: false,
     rating: { average: 4.8, count: 126 },
     dailyTarget: 12,
-    currentOrder: 'order-demo-1',
+    currentOrder: null,
     location: { lat: 37.7749, lng: -122.4194 },
     lastLocationAt: now,
     notificationPrefs: {
@@ -474,7 +474,7 @@ function createInitialState(): MockState {
     ...card,
   }));
   const orders = [
-    makeOrder(menuItems, restaurants[0], 0, 'out_for_delivery'),
+    makeOrder(menuItems, restaurants[0], 0, 'delivered'),
     makeOrder(menuItems, restaurants[4], 1, 'delivered'),
     makeOrder(menuItems, restaurants[2], 2, 'delivered'),
     makeOrder(menuItems, restaurants[1], 3, 'confirmed'),
@@ -649,7 +649,8 @@ export function getMockState(): MockState {
         cachedState = state;
         const catalogChanged = upgradeGeneratedCatalogImages(cachedState);
         const demoPhoneChanged = upgradeDemoCustomerPhone(cachedState);
-        if (catalogChanged || demoPhoneChanged) persistMockState();
+        const deliveryFixtureChanged = upgradeDemoDeliveryFixture(cachedState);
+        if (catalogChanged || demoPhoneChanged || deliveryFixtureChanged) persistMockState();
         return cachedState;
       }
       console.warn('Ignoring incomplete FeastGo demo data; restoring the built-in demo catalog.');
@@ -672,6 +673,34 @@ function upgradeDemoCustomerPhone(state: MockState): boolean {
   }
   if (state.active.customer.id === 'user-demo' && state.active.customer.phone === '+15550100') {
     state.active.customer.phone = '9876543210';
+    changed = true;
+  }
+  return changed;
+}
+
+function upgradeDemoDeliveryFixture(state: MockState): boolean {
+  const demoOrder = state.orders.find((order) => order._id === 'order-demo-1');
+  let changed = false;
+  const activeDeliveryStatuses = ['assigned', 'accepted', 'reached_restaurant', 'picked_up', 'out_for_delivery', 'reached_customer'];
+  if (
+    demoOrder?.deliveryPartner === 'delivery-demo' &&
+    (demoOrder.status === 'out_for_delivery' || activeDeliveryStatuses.includes(demoOrder.deliveryStatus))
+  ) {
+    const at = new Date().toISOString();
+    demoOrder.status = 'delivered';
+    demoOrder.deliveryStatus = 'delivered';
+    if (!demoOrder.statusHistory.some((entry) => entry.status === 'delivered')) {
+      demoOrder.statusHistory.push({ status: 'delivered', at });
+    }
+    if (!demoOrder.deliveryStatusHistory.some((entry) => entry.status === 'delivered')) {
+      demoOrder.deliveryStatusHistory.push({ status: 'delivered', at });
+    }
+    demoOrder.deliveredAt ??= at;
+    changed = true;
+  }
+  if (state.active.delivery.currentOrder === 'order-demo-1') {
+    state.active.delivery.currentOrder = null;
+    state.delivery.currentOrder = null;
     changed = true;
   }
   return changed;

@@ -45,6 +45,15 @@ const DELIVERY_STATUSES: DeliveryStatus[] = [
   'failed',
   'returned',
 ];
+const ACTIVE_DELIVERY_STATUSES: DeliveryStatus[] = [
+  'assigned',
+  'accepted',
+  'reached_restaurant',
+  'picked_up',
+  'out_for_delivery',
+  'reached_customer',
+];
+const PENDING_PICKUP_STATUSES: DeliveryStatus[] = ['assigned', 'accepted', 'reached_restaurant'];
 
 function isRecord(value: unknown): value is JsonRecord {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -96,6 +105,82 @@ function recordDeliveryStatus(order: Order, value: unknown) {
   if (order.deliveryStatus === status) return;
   order.deliveryStatus = status;
   order.deliveryStatusHistory.push({ status, at: new Date().toISOString() });
+}
+
+function deliveryPartnerId(order: Order): string | null {
+  const partner = order.deliveryPartner;
+  return typeof partner === 'string' ? partner : partner?._id ?? null;
+}
+
+function deliveryOrdersFor(state: MockState, partnerId = state.active.delivery.id): Order[] {
+  return state.orders
+    .filter((order) => deliveryPartnerId(order) === partnerId)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, 200);
+}
+
+function deliveryCompletedAt(order: Order): string | null {
+  return (
+    order.deliveredAt ??
+    [...order.deliveryStatusHistory].reverse().find((entry) => entry.status === 'delivered')?.at ??
+    null
+  );
+}
+
+function deliveryDashboardStats(state: MockState) {
+  const orders = deliveryOrdersFor(state);
+  const delivered = orders.filter((order) => order.deliveryStatus === 'delivered');
+  const cancelled = orders.filter((order) => order.deliveryStatus === 'cancelled').length;
+  const failed = orders.filter((order) => order.deliveryStatus === 'failed').length;
+  const finished = delivered.length + cancelled + failed;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const recentDeliveries = [...delivered]
+    .sort((a, b) => new Date(deliveryCompletedAt(b) ?? 0).getTime() - new Date(deliveryCompletedAt(a) ?? 0).getTime())
+    .slice(0, 5);
+
+  return {
+    todayDeliveries: delivered.filter((order) => {
+      const completedAt = deliveryCompletedAt(order);
+      return completedAt !== null && new Date(completedAt).getTime() >= today.getTime();
+    }).length,
+    pendingPickups: orders.filter((order) => PENDING_PICKUP_STATUSES.includes(order.deliveryStatus)).length,
+    activeDeliveries: orders.filter((order) => ACTIVE_DELIVERY_STATUSES.includes(order.deliveryStatus)).length,
+    completedDeliveries: delivered.length,
+    cancelledDeliveries: cancelled + failed,
+    failedDeliveries: failed,
+    successRate: finished ? Math.round((delivered.length / finished) * 1000) / 10 : 0,
+    rating: state.active.delivery.rating,
+    recentDeliveries,
+  };
+}
+
+function hasActiveDelivery(state: MockState, partnerId: string, exceptOrderId?: string): boolean {
+  return state.orders.some(
+    (order) =>
+      order._id !== exceptOrderId &&
+      deliveryPartnerId(order) === partnerId &&
+      ACTIVE_DELIVERY_STATUSES.includes(order.deliveryStatus)
+  );
+}
+
+function autoAssignDeliveryPartner(state: MockState, order: Order): boolean {
+  const partner = state.active.delivery;
+  if (
+    order.deliveryPartner ||
+    partner.status !== 'approved' ||
+    partner.isSuspended ||
+    !partner.isOnline ||
+    hasActiveDelivery(state, partner.id, order._id)
+  ) {
+    return false;
+  }
+  const initialStatus: DeliveryStatus = partner.autoAcceptOrders ? 'accepted' : 'assigned';
+  order.deliveryPartner = partner.id;
+  recordDeliveryStatus(order, initialStatus);
+  partner.currentOrder = order._id;
+  state.delivery = partner;
+  return true;
 }
 
 function restaurantForSlug(state: MockState, slug: string): Restaurant | undefined {
@@ -632,23 +717,31 @@ function accountRoutes(state: MockState, role: 'seller' | 'delivery' | 'admin', 
     if (action === 'me' && method === 'GET') return { user: active };
     if (action === 'me' && method === 'PATCH') {
       if (role === 'seller') state.active.seller = { ...state.active.seller, ...body };
-      if (role === 'delivery') state.active.delivery = { ...state.active.delivery, ...body };
+      if (role === 'delivery') {
+        state.active.delivery = { ...state.active.delivery, ...body };
+        state.delivery = state.active.delivery;
+      }
       save(state);
       return { user: state.active[role] };
     }
     if (action === 'profile' && method === 'PATCH') {
       if (role === 'seller') state.active.seller = { ...state.active.seller, ...body };
-      if (role === 'delivery') state.active.delivery = { ...state.active.delivery, ...body };
+      if (role === 'delivery') {
+        state.active.delivery = { ...state.active.delivery, ...body };
+        state.delivery = state.active.delivery;
+      }
       save(state);
       return { user: state.active[role] };
     }
     if (action === 'change-phone' && path[2] === 'verify' && method === 'POST' && role === 'delivery') {
       state.active.delivery = { ...state.active.delivery, phone: text(body['phone'], state.active.delivery.phone) };
+      state.delivery = state.active.delivery;
       save(state);
       return { user: state.active.delivery };
     }
     if (action === 'change-email' && path[2] === 'verify' && method === 'POST' && role === 'delivery') {
       state.active.delivery = { ...state.active.delivery, email: text(body['email'], state.active.delivery.email) };
+      state.delivery = state.active.delivery;
       save(state);
       return { user: state.active.delivery };
     }
@@ -660,6 +753,7 @@ function accountRoutes(state: MockState, role: 'seller' | 'delivery' | 'admin', 
     }
     if (action === 'online' && method === 'PATCH' && role === 'delivery') {
       state.active.delivery = { ...state.active.delivery, isOnline: body['isOnline'] === true };
+      state.delivery = state.active.delivery;
       save(state);
       return { user: state.active.delivery };
     }
@@ -743,7 +837,10 @@ function sellerRoutes(state: MockState, method: string, path: string[], body: Js
     if (path[2] === 'report-issue') return { issue: { _id: id('issue'), status: 'open', reason: text(body['reason']) } };
     const order = orderById(state, path[1] ?? '');
     if (path.length === 2 && method === 'GET') return { order: order ? { ...order, user: { _id: order.user, name: order.customerName ?? 'Guest', phone: '+15550100', email: 'guest@example.com' } } : null };
-    if (order && path[2] === 'status') recordOrderStatus(order, body['status']);
+    if (order && path[2] === 'status') {
+      recordOrderStatus(order, body['status']);
+      if (body['status'] === 'ready_for_pickup') autoAssignDeliveryPartner(state, order);
+    }
     if (order && path[2] === 'notes') Object.assign(order, { sellerNotes: body['notes'] });
     if (order && path[2] === 'cancel') Object.assign(order, { status: 'cancelled', cancellationReason: body['reason'] });
     if (order && path[2] && method !== 'GET') {
@@ -802,7 +899,14 @@ function deliveryRoutes(state: MockState, method: string, path: string[], body: 
       ),
     };
   }
-  if (path[0] === 'orders' && path.length === 1) return { orders: state.orders };
+  if (path[0] === 'orders' && path.length === 1) {
+    let orders = deliveryOrdersFor(state);
+    const status = url.searchParams.get('status');
+    const deliveryStatus = url.searchParams.get('deliveryStatus');
+    if (status) orders = orders.filter((order) => order.status === status);
+    if (deliveryStatus) orders = orders.filter((order) => order.deliveryStatus === deliveryStatus);
+    return { orders };
+  }
   if (path[0] === 'orders' && path[1]) {
     const order = orderById(state, path[1]);
     if (!order) throw new HttpErrorResponse({ status: 404, error: { message: 'Order not found' } });
@@ -816,28 +920,62 @@ function deliveryRoutes(state: MockState, method: string, path: string[], body: 
         ? { messages: messagesForOrder(state, order._id, thread) }
         : { message: addMessage(state, order._id, thread, 'delivery', text(body['text'])) };
     }
-    if (path[2] === 'accept') {
-      const ownAssignment = order.deliveryPartner === state.active.delivery.id && order.deliveryStatus === 'assigned';
+    if (path[2] === 'accept' && method === 'POST') {
+      const ownAssignment = deliveryPartnerId(order) === state.active.delivery.id && order.deliveryStatus === 'assigned';
       if (!ownAssignment) {
+        if (hasActiveDelivery(state, state.active.delivery.id, order._id)) {
+          throw new HttpErrorResponse({ status: 409, error: { message: 'You already have an active delivery in progress' } });
+        }
         if (order.status !== 'ready_for_pickup' || order.deliveryPartner) {
           throw new HttpErrorResponse({ status: 409, error: { message: 'This order is not ready for pickup or is no longer available' } });
         }
         order.deliveryPartner = state.active.delivery.id;
       }
       recordDeliveryStatus(order, 'accepted');
+      state.active.delivery.currentOrder = order._id;
+      state.delivery = state.active.delivery;
     }
-    if (path[2] === 'reject') {
+    if (path[2] === 'reject' && method === 'POST') {
       if (order.deliveryPartner !== state.active.delivery.id || order.deliveryStatus !== 'assigned') {
         throw new HttpErrorResponse({ status: 400, error: { message: 'This delivery cannot be rejected at this stage' } });
       }
       order.deliveryPartner = null;
       order.reassignCount = (order.reassignCount ?? 0) + 1;
       recordDeliveryStatus(order, 'searching');
+      if (state.active.delivery.currentOrder === order._id) state.active.delivery.currentOrder = null;
+      state.delivery = state.active.delivery;
     }
-    if (path[2] === 'status') {
-      recordDeliveryStatus(order, body['status']);
-      if (body['status'] === 'picked_up') recordOrderStatus(order, 'out_for_delivery');
-      if (body['status'] === 'delivered') recordOrderStatus(order, 'delivered');
+    if (path[2] === 'status' && method === 'PATCH') {
+      if (deliveryPartnerId(order) !== state.active.delivery.id) {
+        throw new HttpErrorResponse({ status: 403, error: { message: 'This order is not assigned to you' } });
+      }
+      if (body['status'] === 'cancelled') {
+        if (!text(body['reason']).trim()) {
+          throw new HttpErrorResponse({ status: 400, error: { message: 'A cancellation reason is required' } });
+        }
+        order.deliveryFailReason = text(body['reason']).trim();
+        order.deliveryPartner = null;
+        order.reassignCount = (order.reassignCount ?? 0) + 1;
+        recordDeliveryStatus(order, 'pending');
+        if (state.active.delivery.currentOrder === order._id) state.active.delivery.currentOrder = null;
+      } else {
+        recordDeliveryStatus(order, body['status']);
+        if (body['status'] === 'picked_up') {
+          recordOrderStatus(order, 'out_for_delivery');
+          order.pickedUpAt = new Date().toISOString();
+        }
+        if (body['status'] === 'delivered') {
+          recordOrderStatus(order, 'delivered');
+          order.deliveredAt = new Date().toISOString();
+          state.active.delivery.currentOrder = null;
+        }
+        if (body['status'] === 'failed') {
+          recordOrderStatus(order, 'failed');
+          order.deliveryFailReason = text(body['reason']);
+          state.active.delivery.currentOrder = null;
+        }
+      }
+      state.delivery = state.active.delivery;
     }
     save(state);
     return { order };
@@ -848,9 +986,9 @@ function deliveryRoutes(state: MockState, method: string, path: string[], body: 
     return { location: state.active.delivery.location };
   }
   if (path[0] === 'earnings' && path[1] === 'history') return { earnings: [], total: 0, page: 1, limit: Number(url.searchParams.get('limit')) || 20 };
-  if (path[0] === 'earnings') return { orderCount: 76, totalEarnings: 42800, todayEarnings: 960, weeklyEarnings: 6200, monthlyEarnings: 18400, tipsReceived: 680, incentives: 1200, pendingPayments: 0, dailyTarget: state.active.delivery.dailyTarget };
+  if (path[0] === 'earnings') return { orderCount: deliveryOrdersFor(state).filter((order) => order.deliveryStatus === 'delivered').length, totalEarnings: 42800, todayEarnings: 960, weeklyEarnings: 6200, monthlyEarnings: 18400, tipsReceived: 680, incentives: 1200, pendingPayments: 0, dailyTarget: state.active.delivery.dailyTarget };
   if (path[0] === 'dashboard' && path[1] === 'weekly-performance') return { days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, index) => ({ day, total: 5 + index })) };
-  if (path[0] === 'dashboard') return { todayDeliveries: 8, pendingPickups: 1, activeDeliveries: 1, completedDeliveries: 7, cancelledDeliveries: 0, failedDeliveries: 0, successRate: 98, rating: state.active.delivery.rating, recentDeliveries: state.orders };
+  if (path[0] === 'dashboard') return deliveryDashboardStats(state);
   if (path[0] === 'messages' && path[1] === 'unread-count') return EMPTY_MESSAGE_COUNTS;
   return undefined;
 }
@@ -894,8 +1032,14 @@ function adminRoutes(state: MockState, method: string, path: string[], body: Jso
   if (path[0] === 'delivery-partners') {
     if (path.length === 1) return { partners: [state.delivery] };
     if (path[2] === 'performance') return { deliveriesCompleted: 76, totalEarnings: 42800, cancelledCount: 2 };
-    if (path[2] === 'status') state.delivery = { ...state.delivery, status: text(body['status'], state.delivery.status) as typeof state.delivery.status };
-    if (path[2] === 'suspend') state.delivery = { ...state.delivery, isSuspended: body['isSuspended'] === true };
+    if (path[2] === 'status') {
+      state.delivery = { ...state.delivery, status: text(body['status'], state.delivery.status) as typeof state.delivery.status };
+      state.active.delivery = state.delivery;
+    }
+    if (path[2] === 'suspend') {
+      state.delivery = { ...state.delivery, isSuspended: body['isSuspended'] === true };
+      state.active.delivery = state.delivery;
+    }
     save(state);
     return { partner: state.delivery };
   }
@@ -936,8 +1080,17 @@ function adminRoutes(state: MockState, method: string, path: string[], body: Jso
       }
       const partnerId = text(body['partnerId']);
       if (!partnerId) throw new HttpErrorResponse({ status: 400, error: { message: 'Choose a delivery partner' } });
+      const partner = state.delivery;
+      if (partner.id !== partnerId || partner.status !== 'approved' || partner.isSuspended || !partner.isOnline) {
+        throw new HttpErrorResponse({ status: 400, error: { message: 'Delivery partner is not available' } });
+      }
+      if (hasActiveDelivery(state, partnerId, order._id)) {
+        throw new HttpErrorResponse({ status: 400, error: { message: 'This partner already has an active delivery' } });
+      }
       order.deliveryPartner = partnerId;
       recordDeliveryStatus(order, 'assigned');
+      partner.currentOrder = order._id;
+      state.active.delivery = partner;
     } else if (path[2] === 'status' && order) recordOrderStatus(order, body['status']);
     else if (path[2] === 'cancel' && order) {
       recordOrderStatus(order, 'cancelled');

@@ -244,9 +244,11 @@ export class DeliveryOrdersComponent implements OnInit, OnDestroy {
   }
 
   private refreshTimer?: ReturnType<typeof setTimeout>;
+  private readonly refreshOrdersOnFocus = () => this.refresh();
 
   async ngOnInit() {
     await this.refresh();
+    window.addEventListener('focus', this.refreshOrdersOnFocus);
     if (!this.messageListenerAttached) {
       this.messageListenerAttached = true;
       this.realtime.on<OrderMessage>('message:new', (m) => {
@@ -270,6 +272,8 @@ export class DeliveryOrdersComponent implements OnInit, OnDestroy {
 
   ngOnDestroy() {
     this.stopScan();
+    if (this.refreshTimer) clearTimeout(this.refreshTimer);
+    window.removeEventListener('focus', this.refreshOrdersOnFocus);
   }
 
   private async refresh() {
@@ -295,6 +299,8 @@ export class DeliveryOrdersComponent implements OnInit, OnDestroy {
         this.unreadFromCustomer.set(0);
         this.unreadFromSeller.set(0);
       }
+    } catch (err: any) {
+      this.toast.error(err?.error?.message ?? 'Could not refresh deliveries');
     } finally {
       this.loading.set(false);
     }

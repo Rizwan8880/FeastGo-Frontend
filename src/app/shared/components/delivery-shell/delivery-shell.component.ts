@@ -51,9 +51,9 @@ const NAV_ITEMS: NavItem[] = [
             >
               <app-icon [name]="item.icon" [size]="18" />
               {{ item.label }}
-              @if (item.label === 'Orders' && pendingOrdersCount() > 0) {
+              @if (item.label === 'Orders' && activeOrdersCount() > 0) {
                 <span class="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-ember-500 px-1.5 text-[11px] font-bold text-white">
-                  {{ pendingOrdersCount() > 99 ? '99+' : pendingOrdersCount() }}
+                  {{ activeOrdersCount() > 99 ? '99+' : activeOrdersCount() }}
                 </span>
               }
             </a>
@@ -106,11 +106,12 @@ export class DeliveryShellComponent implements OnInit, OnDestroy {
 
   navItems = NAV_ITEMS;
   sidebarOpen = signal(false);
-  pendingOrdersCount = signal(0);
+  activeOrdersCount = signal(0);
 
   private accountPollHandle?: ReturnType<typeof setInterval>;
-  private pendingCountPollHandle?: ReturnType<typeof setInterval>;
-  private pendingCountRefreshTimer?: ReturnType<typeof setTimeout>;
+  private activeCountPollHandle?: ReturnType<typeof setInterval>;
+  private activeCountRefreshTimer?: ReturnType<typeof setTimeout>;
+  private readonly refreshCountOnFocus = () => this.refreshActiveOrdersCount();
 
   constructor(
     public auth: DeliveryAuthService,
@@ -124,13 +125,17 @@ export class DeliveryShellComponent implements OnInit, OnDestroy {
       const serverTheme = this.auth.currentUser()?.theme;
       if (serverTheme) this.theme.syncFromServer(serverTheme);
     });
+    effect(() => {
+      if (this.deliveryService.orderChanges() > 0) this.refreshActiveOrdersCount();
+    });
   }
 
   ngOnInit() {
     this.notif.init('delivery');
     if (!this.auth.currentUser()?.isSuspended) {
-      this.refreshPendingOrdersCount();
+      this.refreshActiveOrdersCount();
     }
+    window.addEventListener('focus', this.refreshCountOnFocus);
 
     // Rendered on every delivery page (not just the dashboard), so the
     // "Orders" nav badge needs its own live refresh here rather than relying
@@ -141,10 +146,10 @@ export class DeliveryShellComponent implements OnInit, OnDestroy {
     // badge in that case.
     this.realtime.on<AppNotification>('notification:new', (n) => {
       if (!n.relatedOrder) return;
-      clearTimeout(this.pendingCountRefreshTimer);
-      this.pendingCountRefreshTimer = setTimeout(() => this.refreshPendingOrdersCount(), 400);
+      clearTimeout(this.activeCountRefreshTimer);
+      this.activeCountRefreshTimer = setTimeout(() => this.refreshActiveOrdersCount(), 400);
     });
-    this.pendingCountPollHandle = setInterval(() => this.refreshPendingOrdersCount(), 20000);
+    this.activeCountPollHandle = setInterval(() => this.refreshActiveOrdersCount(), 20000);
 
     // While pending/rejected/suspended, an admin can change that status at
     // any moment from their own session — keep this tab's own account fresh
@@ -161,13 +166,15 @@ export class DeliveryShellComponent implements OnInit, OnDestroy {
 
   ngOnDestroy() {
     if (this.accountPollHandle) clearInterval(this.accountPollHandle);
-    if (this.pendingCountPollHandle) clearInterval(this.pendingCountPollHandle);
+    if (this.activeCountPollHandle) clearInterval(this.activeCountPollHandle);
+    if (this.activeCountRefreshTimer) clearTimeout(this.activeCountRefreshTimer);
+    window.removeEventListener('focus', this.refreshCountOnFocus);
   }
 
-  private async refreshPendingOrdersCount() {
+  private async refreshActiveOrdersCount() {
     try {
       const stats = await this.deliveryService.getDashboardStats();
-      this.pendingOrdersCount.set(stats.pendingPickups);
+      this.activeOrdersCount.set(stats.activeDeliveries);
     } catch {
       // silent — the badge just stays at its last known value
     }
