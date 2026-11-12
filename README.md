@@ -26,4 +26,8 @@ The production-ready static site is generated in `dist/client/browser`.
 - Changes are saved in the browser's `localStorage`. Use **Settings → Local Testing Data** to clear demo state.
 - Sign-in, checkout, payments, messaging and notifications are simulations. No real orders or payments are processed.
 
+## How FeastGo works
+
+See the [Hinglish workflow guide](docs/FEASTGO_WORKFLOW.md) for customer ordering, restaurant and delivery flows, admin tools, demo limitations, data reset, and deployment.
+
 This repository contains only the frontend. The Express/MongoDB backend is not required or included.
