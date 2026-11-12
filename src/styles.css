@@ -1,0 +1,453 @@
+@import 'tailwindcss';
+
+/* Class-based dark mode, scoped wherever `.dark` is applied (e.g. the seller
+   shell root) rather than globally — the customer-facing app stays light-only. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-display: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
+  --font-sans: 'Inter', system-ui, sans-serif;
+
+  /* Official FeastGo design system — one brand identity across Customer,
+     Seller, Delivery Partner, and Admin. Primary is always ember (orange);
+     never substitute blue/purple/other accents for it. */
+  --color-ember-50: #fff2ee;
+  --color-ember-100: #ffe1d3;
+  --color-ember-200: #ffc0a8;
+  --color-ember-300: #ff9a75;
+  --color-ember-400: #ff7548;
+  --color-ember-500: #ff5a3c;
+  --color-ember-600: #e64a2e;
+  --color-ember-700: #c72b0c;
+  --color-ember-800: #9e230f;
+  --color-ember-900: #7f2010;
+
+  --color-ink-50: #f8f8f8;
+  --color-ink-100: #e5e7eb;
+  --color-ink-200: #d1d5db;
+  --color-ink-300: #9c98ab;
+  --color-ink-400: #6b7280;
+  --color-ink-500: #4a465c;
+  --color-ink-600: #363248;
+  --color-ink-700: #26232f;
+  --color-ink-800: #19171f;
+  --color-ink-900: #1c1c1c;
+
+  --color-basil-50: #f0fdf4;
+  --color-basil-100: #dcfce7;
+  --color-basil-400: #4ade80;
+  --color-basil-500: #22c55e;
+  --color-basil-600: #16a34a;
+
+  --color-gold-400: #fbbf24;
+  --color-gold-500: #f59e0b;
+  --color-gold-600: #d97706;
+
+  /* True error red — distinct from the ember brand color, per spec
+     ("Error: #EF4444") — for validation/error states, not CTAs. */
+  --color-danger-50: #fef2f2;
+  --color-danger-100: #fee2e2;
+  --color-danger-500: #ef4444;
+  --color-danger-600: #dc2626;
+  --color-danger-700: #b91c1c;
+
+  /* Informational (non-brand, non-error) accent — spec's "Information: #3B82F6". */
+  --color-info-50: #eff6ff;
+  --color-info-100: #dbeafe;
+  --color-info-500: #3b82f6;
+  --color-info-600: #2563eb;
+
+  --shadow-card: 0 1px 2px rgba(16, 15, 20, 0.04), 0 8px 24px -8px rgba(16, 15, 20, 0.12);
+  --shadow-card-hover: 0 4px 8px rgba(16, 15, 20, 0.06), 0 16px 32px -12px rgba(16, 15, 20, 0.18);
+  --shadow-pop: 0 12px 40px -8px rgba(16, 15, 20, 0.28);
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    color-scheme: light;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-ink-50 text-ink-800 antialiased;
+    background:
+      radial-gradient(ellipse at 10% 0%, rgba(255, 90, 60, 0.045), transparent 34rem),
+      #f7f8fc;
+  }
+
+  h1, h2, h3, h4, .font-display {
+    font-family: var(--font-display);
+  }
+
+  ::selection {
+    background: var(--color-ember-200);
+    color: var(--color-ember-900);
+  }
+
+  :focus-visible {
+    outline: 3px solid rgba(255, 90, 60, 0.72);
+    outline-offset: 3px;
+  }
+
+  button,
+  a,
+  input,
+  select,
+  textarea {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button:not(:disabled),
+  a[href] {
+    touch-action: manipulation;
+  }
+
+  input:not([type='checkbox']):not([type='radio']),
+  select,
+  textarea {
+    border-radius: 0.75rem;
+    transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+  }
+
+  input:not([type='checkbox']):not([type='radio']):focus,
+  select:focus,
+  textarea:focus {
+    box-shadow: 0 0 0 3px rgba(255, 90, 60, 0.12);
+  }
+
+  input[type='checkbox'],
+  input[type='radio'] {
+    accent-color: var(--color-ember-500);
+  }
+}
+
+@layer utilities {
+  .container-shell {
+    @apply mx-auto w-full max-w-[1200px] px-4 sm:px-6 lg:px-8;
+  }
+
+  /* Same padding scale as .container-shell but no max-width — matches the
+     seller/delivery/admin panels, whose content area just fills whatever
+     space is left next to the sidebar instead of centering in a fixed column. */
+  .container-shell-full {
+    @apply mx-auto w-full px-4 sm:px-6 lg:px-8;
+  }
+
+  /* Shared auth-card surface across login, signup, and recovery screens. */
+  .auth-card {
+    @apply rounded-[28px] border border-ink-100 bg-white/90 shadow-[var(--shadow-pop)] backdrop-blur-xl;
+  }
+
+  .auth-page {
+    isolation: isolate;
+    background-color: transparent;
+  }
+
+  .auth-page::before {
+    position: fixed;
+    z-index: -1;
+    inset: 0;
+    background:
+      radial-gradient(ellipse at 12% 8%, rgba(255, 90, 60, 0.13), transparent 30rem),
+      radial-gradient(ellipse at 92% 88%, rgba(255, 154, 117, 0.18), transparent 28rem),
+      linear-gradient(135deg, #f8f8fc, #fffaf7 55%, #f5f6fb);
+    content: '';
+    pointer-events: none;
+  }
+
+  .auth-page-full {
+    min-height: 100svh;
+  }
+
+  .auth-content {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 28rem;
+    margin-inline: auto;
+  }
+
+  .auth-mark {
+    width: 3rem;
+    height: 3rem;
+    border: 1px solid rgba(255, 255, 255, 0.42);
+    border-radius: 1rem;
+    background: linear-gradient(145deg, #ff7655, #e64a2e);
+    box-shadow: 0 10px 24px -12px rgba(230, 74, 46, 0.75);
+  }
+
+  .auth-page .auth-card {
+    border-color: rgba(226, 228, 236, 0.92);
+    border-radius: 1.65rem;
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 28px 80px -44px rgba(35, 29, 48, 0.45), 0 10px 28px -22px rgba(35, 29, 48, 0.22);
+  }
+
+  .auth-page input:not([type='checkbox']):not([type='radio']),
+  .auth-page select,
+  .auth-page textarea {
+    min-height: 3rem;
+    border-color: #dfe1e9;
+    background-color: rgba(255, 255, 255, 0.96);
+    color: #26232f;
+  }
+
+  .auth-page input:not([type='checkbox']):not([type='radio']):focus,
+  .auth-page select:focus,
+  .auth-page textarea:focus {
+    border-color: #ff7548;
+  }
+
+  .auth-page .auth-card button[type='submit'] {
+    min-height: 3rem;
+    border-radius: 0.9rem;
+    box-shadow: 0 8px 18px -12px rgba(199, 43, 12, 0.8);
+    transition: transform 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+  }
+
+  .auth-page .auth-card button[type='submit']:not(:disabled):hover {
+    transform: translateY(-1px);
+    box-shadow: 0 12px 22px -12px rgba(199, 43, 12, 0.75);
+  }
+
+  .scrollbar-none {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+
+  .card-surface {
+    @apply rounded-[20px] border border-ink-100 bg-white shadow-[var(--shadow-card)] transition-[box-shadow,transform] duration-200 dark:border-ink-800 dark:bg-ink-800 dark:shadow-none;
+  }
+  .card-surface:hover {
+    box-shadow: var(--shadow-card-hover);
+    transform: translateY(-2px);
+  }
+}
+
+.portal-shell {
+  min-width: 0;
+  background-color: #f5f6fa;
+  background-image: radial-gradient(ellipse at 85% 0%, rgba(255, 90, 60, 0.055), transparent 32rem);
+}
+
+.portal-sidebar {
+  width: 17rem;
+  height: 100dvh;
+  background: rgba(255, 255, 255, 0.94);
+  border-color: #e8e9ef;
+  box-shadow: 10px 0 34px -28px rgba(22, 24, 35, 0.32);
+  backdrop-filter: blur(18px);
+}
+
+.portal-nav {
+  padding: 1.15rem 0.85rem;
+}
+
+.portal-nav-link {
+  min-height: 2.8rem;
+  border-radius: 0.9rem;
+  transition: background-color 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.portal-nav-link:hover {
+  transform: translateX(2px);
+}
+
+.portal-nav-link-active {
+  background: linear-gradient(100deg, rgba(255, 90, 60, 0.12), rgba(255, 90, 60, 0.045));
+  color: #c72b0c;
+  box-shadow: inset 3px 0 #ff5a3c;
+}
+
+.portal-header {
+  min-height: 4.25rem;
+  border-color: rgba(226, 228, 236, 0.86);
+  background: rgba(255, 255, 255, 0.84);
+  box-shadow: 0 8px 26px -24px rgba(22, 24, 35, 0.5);
+  backdrop-filter: blur(18px);
+}
+
+.portal-main {
+  width: 100%;
+  min-width: 0;
+  padding: clamp(1rem, 2.25vw, 2rem);
+}
+
+.portal-main > * {
+  min-width: 0;
+}
+
+.portal-shell .card-surface {
+  border-radius: 1.2rem;
+  border-color: #e8eaf1;
+  box-shadow: 0 10px 30px -26px rgba(22, 24, 35, 0.45), 0 2px 6px rgba(22, 24, 35, 0.035);
+}
+
+.portal-shell .card-surface:hover {
+  box-shadow: 0 16px 36px -26px rgba(22, 24, 35, 0.35), 0 4px 10px rgba(22, 24, 35, 0.04);
+}
+
+.portal-main table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.portal-main th {
+  letter-spacing: 0.055em;
+}
+
+.portal-main tbody tr {
+  transition: background-color 140ms ease;
+}
+
+.portal-main tbody tr:hover {
+  background-color: rgba(255, 90, 60, 0.035);
+}
+
+.dark {
+  color-scheme: dark;
+}
+
+.dark .portal-shell,
+.portal-shell.dark {
+  background-color: #131219;
+  background-image: radial-gradient(ellipse at 85% 0%, rgba(255, 90, 60, 0.07), transparent 32rem);
+}
+
+.dark .portal-sidebar,
+.dark .portal-header {
+  background: rgba(30, 28, 37, 0.91);
+  border-color: #34313d;
+}
+
+.dark .portal-nav-link-active {
+  background: linear-gradient(100deg, rgba(255, 90, 60, 0.2), rgba(255, 90, 60, 0.08));
+  color: #ff9a75;
+}
+
+.dark .portal-shell .card-surface {
+  border-color: #373440;
+  background-color: #201e27;
+  box-shadow: 0 12px 32px -28px rgba(0, 0, 0, 0.85), 0 2px 8px rgba(0, 0, 0, 0.16);
+}
+
+.dark .text-ink-900,
+.dark .text-ink-800 {
+  color: #f6f4f8;
+}
+
+.dark .text-ink-700 {
+  color: #e8e5ed;
+}
+
+.dark .text-ink-600 {
+  color: #d3cfdb;
+}
+
+.dark .text-ink-500 {
+  color: #c1bdca;
+}
+
+.dark .text-ink-400 {
+  color: #aaa5b7;
+}
+
+.dark .border-ink-100 {
+  border-color: #373440;
+}
+
+.dark .border-ink-200 {
+  border-color: #46424f;
+}
+
+.dark .bg-ink-50 {
+  background-color: #19171f;
+}
+
+.dark .bg-ink-100 {
+  background-color: #292732;
+}
+
+.dark .bg-white {
+  background-color: #201e27;
+}
+
+.dark input:not([type='checkbox']):not([type='radio']),
+.dark select,
+.dark textarea {
+  border-color: #45414f;
+  background-color: #19171f;
+  color: #f6f4f8;
+}
+
+.dark .portal-main tbody tr:hover {
+  background-color: rgba(255, 255, 255, 0.035);
+}
+
+@media (max-width: 1023px) {
+  .portal-sidebar {
+    width: min(86vw, 19rem);
+    box-shadow: 24px 0 60px -28px rgba(22, 24, 35, 0.48);
+  }
+}
+
+@media (max-width: 640px) {
+  .portal-main {
+    padding: 1rem;
+  }
+
+  @media (max-width: 480px) {
+    .auth-page .grid.grid-cols-2 {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .auth-page .auth-card {
+      border-radius: 1.35rem;
+    }
+  }
+
+  .portal-main .grid.grid-cols-4,
+  .portal-main .grid.grid-cols-5 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .portal-main .card-surface {
+    border-radius: 1rem;
+  }
+
+  .container-shell {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.animate-toast-in {
+  animation: toast-in 180ms ease-out;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.animate-fade-in {
+  animation: fade-in 220ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
