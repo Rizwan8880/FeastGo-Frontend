@@ -4,11 +4,21 @@ import { OrderMessage } from '../models/message.model';
 import { Restaurant } from '../models/restaurant.model';
 import { Address, User } from '../models/user.model';
 import { DemoBanner, DemoCategory, DemoCoupon, DemoReview, getMockState, MockState, persistMockState } from './mock-data';
+import { normalizeMobile, validateMobile } from '../../shared/utils/mobile-validation';
+import { normalizeName, validateName } from '../../shared/utils/profile-validation';
 
 type JsonRecord = Record<string, unknown>;
 type Role = 'customer' | 'seller' | 'delivery' | 'admin';
+type CustomerAuthMode = 'login' | 'signup';
 
 const EMPTY_MESSAGE_COUNTS = { count: 0, byOrder: {} };
+const DEMO_CUSTOMER_OTP = '123456';
+const CUSTOMER_OTP_TTL_MS = 30_000;
+const MAX_CUSTOMER_OTP_ATTEMPTS = 5;
+const customerOtpSessions = new Map<
+  string,
+  { code: string; mode: CustomerAuthMode; expiresAt: number; attempts: number; verified: boolean }
+>();
 const ORDER_STATUSES: OrderStatus[] = [
   'placed',
   'confirmed',
@@ -42,6 +52,17 @@ function isRecord(value: unknown): value is JsonRecord {
 
 function bodyOf(request: HttpRequest<unknown>): JsonRecord {
   return isRecord(request.body) ? request.body : {};
+}
+
+function customerPhone(value: unknown): string {
+  const phone = normalizeMobile(text(value));
+  const validation = validateMobile(phone);
+  if (!validation.valid) throw new HttpErrorResponse({ status: 400, error: { message: validation.message } });
+  return phone;
+}
+
+function customerByPhone(state: MockState, phone: string): User | undefined {
+  return state.users.find((user) => normalizeMobile(user.phone ?? '') === phone);
 }
 
 function text(value: unknown, fallback = ''): string {
@@ -375,18 +396,120 @@ function publicRoutes(state: MockState, method: string, path: string[], url: URL
 
 function customerAuth(state: MockState, method: string, path: string[], body: JsonRecord) {
   if (path[1] === 'otp' && path[2] === 'request' && method === 'POST') {
-    return { message: 'Your demo verification code is ready.', devOtp: '123456' };
+    if (body['method'] !== 'phone') {
+      throw new HttpErrorResponse({ status: 400, error: { message: 'Sign in with your mobile number.' } });
+    }
+    const phone = customerPhone(body['value']);
+    const mode = body['mode'];
+    if (mode !== 'login' && mode !== 'signup') {
+      throw new HttpErrorResponse({ status: 400, error: { message: 'Choose login or sign up to continue.' } });
+    }
+    const existing = customerByPhone(state, phone);
+    if (mode === 'login' && !existing) {
+      throw new HttpErrorResponse({ status: 404, error: { message: 'Account not found. Please sign up first.' } });
+    }
+    if (mode === 'signup' && existing) {
+      throw new HttpErrorResponse({ status: 409, error: { message: 'An account already exists with this mobile number. Please log in instead.' } });
+    }
+    customerOtpSessions.set(phone, {
+      code: DEMO_CUSTOMER_OTP,
+      mode,
+      expiresAt: Date.now() + CUSTOMER_OTP_TTL_MS,
+      attempts: 0,
+      verified: false,
+    });
+    return { message: 'Your demo verification code is ready.', devOtp: DEMO_CUSTOMER_OTP };
   }
   if (path[1] === 'otp' && path[2] === 'verify' && method === 'POST') {
-    if (body['mode'] === 'signup') return { verified: true };
-    return authResponse(state, 'customer', body);
+    if (body['method'] !== 'phone') {
+      throw new HttpErrorResponse({ status: 400, error: { message: 'Sign in with your mobile number.' } });
+    }
+    const phone = customerPhone(body['value']);
+    const mode = body['mode'];
+    if (mode !== 'login' && mode !== 'signup') {
+      throw new HttpErrorResponse({ status: 400, error: { message: 'Choose login or sign up to continue.' } });
+    }
+    const otpSession = customerOtpSessions.get(phone);
+    if (!otpSession || otpSession.mode !== mode) {
+      throw new HttpErrorResponse({ status: 400, error: { message: 'Request a new verification code first.' } });
+    }
+    if (otpSession.expiresAt <= Date.now()) {
+      customerOtpSessions.delete(phone);
+      throw new HttpErrorResponse({ status: 400, error: { message: 'This code has expired. Request a new one.' } });
+    }
+    const code = String(body['code'] ?? '');
+    if (!/^\d{6}$/.test(code) || code !== otpSession.code) {
+      otpSession.attempts += 1;
+      if (otpSession.attempts >= MAX_CUSTOMER_OTP_ATTEMPTS) {
+        customerOtpSessions.delete(phone);
+        throw new HttpErrorResponse({ status: 400, error: { message: 'Too many incorrect attempts. Request a new OTP.' } });
+      }
+      throw new HttpErrorResponse({ status: 400, error: { message: 'Incorrect OTP. Please try again.' } });
+    }
+    if (mode === 'signup') {
+      if (customerByPhone(state, phone)) {
+        customerOtpSessions.delete(phone);
+        throw new HttpErrorResponse({ status: 409, error: { message: 'An account already exists with this mobile number. Please log in instead.' } });
+      }
+      otpSession.verified = true;
+      return { verified: true };
+    }
+    const user = customerByPhone(state, phone);
+    if (!user) {
+      customerOtpSessions.delete(phone);
+      throw new HttpErrorResponse({ status: 404, error: { message: 'Account not found. Please sign up first.' } });
+    }
+    if (user.isBlocked) {
+      customerOtpSessions.delete(phone);
+      throw new HttpErrorResponse({ status: 403, error: { message: 'Your account has been blocked. Contact support for help.' } });
+    }
+    customerOtpSessions.delete(phone);
+    state.active.customer = user;
+    return authResponse(state, 'customer', { ...body, value: phone });
   }
   if (path[1] === 'complete-signup' && method === 'POST') {
-    const user = updateUser(state, {
-      name: text(body['name'], state.active.customer.name),
-      email: body['method'] === 'email' ? text(body['value']) : state.active.customer.email,
-      phone: body['method'] === 'phone' ? text(body['value']) : state.active.customer.phone,
-    });
+    if (body['method'] !== 'phone') {
+      throw new HttpErrorResponse({ status: 400, error: { message: 'Sign up with your mobile number.' } });
+    }
+    const phone = customerPhone(body['value']);
+    const otpSession = customerOtpSessions.get(phone);
+    if (!otpSession || otpSession.mode !== 'signup' || !otpSession.verified || otpSession.expiresAt <= Date.now()) {
+      customerOtpSessions.delete(phone);
+      throw new HttpErrorResponse({ status: 400, error: { message: 'Verify your mobile number before creating an account.' } });
+    }
+    const name = normalizeName(text(body['name']));
+    const nameValidation = validateName(name);
+    if (!nameValidation.valid) {
+      throw new HttpErrorResponse({ status: 400, error: { message: nameValidation.message } });
+    }
+    if (body['termsAccepted'] !== true) {
+      throw new HttpErrorResponse({ status: 400, error: { message: 'You must accept the Terms & Conditions to continue.' } });
+    }
+    if (customerByPhone(state, phone)) {
+      customerOtpSessions.delete(phone);
+      throw new HttpErrorResponse({ status: 409, error: { message: 'An account already exists with this mobile number. Please log in instead.' } });
+    }
+    const user: User = {
+      ...state.active.customer,
+      id: id('user'),
+      name,
+      email: null,
+      phone,
+      dob: null,
+      gender: null,
+      photo: null,
+      location: { lat: null, lng: null },
+      addresses: [],
+      favoriteRestaurants: [],
+      isBlocked: false,
+      savedCards: [],
+      savedUpi: [],
+      createdAt: new Date().toISOString(),
+    };
+    state.active.customer = user;
+    state.users.unshift(user);
+    customerOtpSessions.delete(phone);
+    save(state);
     return { token: 'demo-customer-token', user };
   }
   if (path[1] === 'refresh-token' && method === 'POST') return { token: 'demo-customer-token', user: state.active.customer };

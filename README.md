@@ -21,7 +21,8 @@ The production-ready static site is generated in `dist/client/browser`.
 
 ## Demo behavior
 
-- Customer login uses the demo OTP `123456`; seller, delivery and admin demo forms accept any non-empty credentials.
+- Customer login uses demo mobile number `9876543210` and OTP `123456`. Sign up with a valid 10-digit mobile number, a 3–50 character name, and accepted terms.
+- Seller, delivery and admin demo forms accept any non-empty credentials.
 - Changes are saved in the browser's `localStorage`. Use **Settings → Local Testing Data** to clear demo state.
 - Sign-in, checkout, payments, messaging and notifications are simulations. No real orders or payments are processed.
 

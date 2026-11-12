@@ -368,7 +368,7 @@ function createInitialState(): MockState {
     id: 'user-demo',
     name: 'Aarav Sharma',
     email: 'aarav@example.com',
-    phone: '+15550100',
+    phone: '9876543210',
     dob: null,
     gender: null,
     photo: null,
@@ -647,7 +647,9 @@ export function getMockState(): MockState {
       const state: unknown = JSON.parse(saved);
       if (isStoredMockState(state)) {
         cachedState = state;
-        if (upgradeGeneratedCatalogImages(cachedState)) persistMockState();
+        const catalogChanged = upgradeGeneratedCatalogImages(cachedState);
+        const demoPhoneChanged = upgradeDemoCustomerPhone(cachedState);
+        if (catalogChanged || demoPhoneChanged) persistMockState();
         return cachedState;
       }
       console.warn('Ignoring incomplete FeastGo demo data; restoring the built-in demo catalog.');
@@ -658,6 +660,21 @@ export function getMockState(): MockState {
   cachedState = createInitialState();
   persistMockState();
   return cachedState;
+}
+
+function upgradeDemoCustomerPhone(state: MockState): boolean {
+  let changed = false;
+  for (const user of state.users) {
+    if (user.id === 'user-demo' && user.phone === '+15550100') {
+      user.phone = '9876543210';
+      changed = true;
+    }
+  }
+  if (state.active.customer.id === 'user-demo' && state.active.customer.phone === '+15550100') {
+    state.active.customer.phone = '9876543210';
+    changed = true;
+  }
+  return changed;
 }
 
 export function persistMockState() {
