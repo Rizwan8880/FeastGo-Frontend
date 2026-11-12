@@ -1,14 +1,14 @@
-# FeastGo kaise kaam karta hai
+# How FeastGo Works
 
-Yeh guide FeastGo ke demo ko chalane, order flow test karne, aur app ke alag-alag roles samajhne ke liye hai.
+This guide explains how to run the FeastGo demo, test its order flow, and use its different roles.
 
-## 1. FeastGo ke baare mein
+## 1. About FeastGo
 
-FeastGo ek food-ordering frontend demo hai. Customer restaurant se food select karke order place karta hai. Restaurant partner order accept karke food prepare karta hai. Delivery partner order pickup karke customer tak pahunchata hai. Admin orders aur platform data manage kar sakta hai.
+FeastGo is a food-ordering frontend demo. Customers choose food from a restaurant and place an order. The restaurant partner accepts the order and prepares the food. A delivery partner picks it up and takes it to the customer. Admins can manage orders and platform data.
 
-**Important:** Abhi yeh frontend-only demo hai. API calls `/mock-api` se simulated hoti hain, aur demo data browser ke `localStorage` mein save hota hai. Real backend, database, SMS, email, payment processing, ya multi-user sync connected nahi hai.
+**Important:** This is currently a frontend-only demo. API calls are simulated through `/mock-api`, and demo data is stored in the browser's `localStorage`. There is no connected production backend, database, SMS, email, payment processing, or multi-user sync.
 
-## 2. App kholna
+## 2. Open the app
 
 - **Live website:** [feastgo-frontend.pages.dev](https://feastgo-frontend.pages.dev)
 - **Customer home:** `/`
@@ -18,132 +18,132 @@ FeastGo ek food-ordering frontend demo hai. Customer restaurant se food select k
 - **Delivery partner:** `/delivery/login`
 - **Admin:** `/admin/login`
 
-In routes ko live website ke URL ke baad laga kar khola ja sakta hai. Example: `https://feastgo-frontend.pages.dev/seller/login`.
+Open a route by adding it to the live website URL. For example: `https://feastgo-frontend.pages.dev/seller/login`.
 
 ### Local development
 
-Frontend repository ke root folder mein:
+From the frontend repository root:
 
 ```bash
 npm ci
 npm start
 ```
 
-Phir `http://localhost:4200` kholo.
+Then open `http://localhost:4200`.
 
-## 3. Customer ka order flow
+## 3. Customer order flow
 
-1. Home page se **Explore restaurants** ya **Browse restaurants** kholo.
-2. Restaurant select karke menu se item cart mein add karo.
-3. Cart check karke **Checkout** par jao.
-4. Delivery address choose karo ya naya address add karo.
-5. Payment method select karo. Card, UPI, aur Cash on Delivery (COD) options demo ke liye hain; asli payment nahi hoti.
-6. Order place karne ke baad **Orders** page ya order tracking page se progress dekho.
+1. Select **Explore restaurants** or **Browse restaurants** from the home page.
+2. Choose a restaurant and add menu items to the cart.
+3. Review the cart and select **Checkout**.
+4. Choose a delivery address or add a new one.
+5. Select a payment method. Card, UPI, and Cash on Delivery (COD) are demo options; no real payment is made.
+6. After placing the order, follow its progress from the **Orders** page or order-tracking page.
 
-Checkout ke liye customer login zaroori hai. Login na hua ho to app login page par bhejegi; login ke baad checkout par wapas aa sakte ho.
+Customers must sign in to check out. If not signed in, the app redirects to the login page; after signing in, they can return to checkout.
 
 ### Customer login/signup
 
-- Demo customer ka phone: **9876543210**
+- Demo customer phone number: **9876543210**
 - Demo OTP: **123456**
-- OTP app mein hi dikhaya jata hai; SMS nahi bheja jata. Code 30 seconds baad expire hota hai. Expire ho to **Resend code** use karo.
-- Naya account banane ke liye alag, valid 10-digit number, 3-50 character naam, aur Terms acceptance chahiye. Signup ke waqt bhi demo OTP app par dikhaya jata hai.
-- Pehli login ke baad location share karna optional hai; **Skip for now** se aage badh sakte ho.
+- The OTP is shown in the app; no SMS is sent. It expires after 30 seconds. Select **Resend code** if it expires.
+- To create an account, use a different valid 10-digit phone number, a name of 3-50 characters, and accept the Terms. The demo OTP is shown in the app during signup as well.
+- Sharing location after the first login is optional; select **Skip for now** to continue.
 
-## 4. Restaurant partner ka flow
+## 4. Restaurant partner flow
 
-Demo login mein form ke required fields mein koi non-empty demo value use kar sakte ho. Real password istemal na karo.
+For the demo login, enter any non-empty values in the required fields. Do not use a real password.
 
-1. `/seller/login` se sign in karke Seller Dashboard kholo.
-2. **Menu** section se dishes add, edit, duplicate, availability change, ya remove karo.
-3. **Orders** mein naye customer orders dekho.
-4. Normal order flow:
+1. Sign in at `/seller/login` to open the Seller Dashboard.
+2. In **Menu**, add, edit, duplicate, change availability, or remove dishes.
+3. Find new customer orders under **Orders**.
+4. Use the normal order flow:
    - **Accept**: `placed` -> `confirmed`
    - **Start preparing**: `confirmed` -> `preparing`
    - **Ready for pickup**: `preparing` -> `ready_for_pickup`
-5. Order ready hone par delivery assignment ki koshish hoti hai.
+5. Delivery assignment is attempted after the order is ready.
 
-Order ko seedha delivery ke liye assign nahi kiya jata jab tak restaurant usay `ready_for_pickup` na kare. Agar demo partner approved, online, aur free ho to order automatically assign hota hai. Partner busy/offline ho ya available na ho to order ready magar unassigned rehta hai; delivery partner baad mein Available Orders se accept kar sakta hai.
+An order is not assigned for delivery until the restaurant marks it `ready_for_pickup`. If a demo partner is approved, online, and available, the order is assigned automatically. If no partner is available, the order remains ready but unassigned; a delivery partner can accept it later from Available Orders.
 
-## 5. Delivery partner ka flow
+## 5. Delivery partner flow
 
-Demo login mein required fields mein koi non-empty demo value use kar sakte ho. Default demo partner approved aur online hota hai.
+For the demo login, enter any non-empty values in the required fields. The default demo partner is approved and online.
 
-1. `/delivery/login` se sign in karo.
-2. Dashboard par online status aur Available Orders dekho.
-3. Assigned order ko **Accept order** karo. Agar order available list mein unassigned ho to usay accept karne se woh tumhare naam assign ho jayega.
-4. Delivery ko is sequence mein update karo:
+1. Sign in at `/delivery/login`.
+2. Check online status and Available Orders on the dashboard.
+3. Accept an assigned order using **Accept order**. If an unassigned order appears in the available list, accepting it assigns the order to you.
+4. Update delivery status in this sequence:
    - `assigned` -> **Accept order**
    - `accepted` -> **Reached restaurant**
    - `reached_restaurant` -> **Mark picked up**
    - `picked_up` -> **Start delivery**
    - `out_for_delivery` -> **Reached customer**
-   - Customer ke paas pahunch kar delivery OTP/QR section complete karke **Mark delivered**
-5. Complete orders **History** mein milte hain.
+   - After reaching the customer, complete the delivery OTP/QR section and select **Mark delivered**.
+5. Completed orders appear in **History**.
 
-Demo UI delivery complete karne se pehle kam-se-kam 4 digits mangta hai. Har demo order mein customer OTP/QR available ho yeh zaroori nahi; is mock mein OTP server se verify bhi nahi hota. QR scan camera/browser support aur permission par depend karta hai.
+The demo UI requires at least four digits before completing a delivery. A customer OTP/QR is not necessarily available for every demo order, and the mock does not verify the OTP on a server. QR scanning depends on camera/browser support and permission.
 
-**Orders badge** active assigned deliveries ka count hai; delivered orders history mein count hote hain. Ek partner ke paas ek waqt mein ek active delivery ho sakti hai. Assigned order ko reject karne par woh unassigned ho kar dobara available ho sakta hai.
+The **Orders** badge counts active assigned deliveries; delivered orders are shown in History. A partner can have one active delivery at a time. Rejecting an assigned order can unassign it and make it available again.
 
-## 6. Admin ka flow
+## 6. Admin flow
 
-`/admin/login` par required fields mein koi non-empty demo value use karke sign in karo. Real credentials mat use karo.
+At `/admin/login`, enter any non-empty demo values in the required fields. Do not use real credentials.
 
-Admin dashboard se platform sections jaise users, sellers, delivery partners, restaurants, foods/categories, orders, refunds, coupons, reviews, reports, notifications, aur settings manage kiye ja sakte hain.
+The Admin Dashboard can manage platform sections such as users, sellers, delivery partners, restaurants, foods/categories, orders, refunds, coupons, reviews, reports, notifications, and settings.
 
-**Orders** section mein admin:
+In the **Orders** section, admins can:
 
-- Orders filter/search karke status update kar sakta hai.
-- Delivery partner assign ya reassign kar sakta hai.
-- Assignment ke liye partner available hona chahiye; busy, offline, unapproved, ya suspended partner ko assign nahi kiya ja sakta.
+- Filter or search orders and update their status.
+- Assign or reassign a delivery partner.
+- Assign only an available partner; busy, offline, unapproved, or suspended partners cannot be assigned.
 
-Normal testing mein seller aur delivery partner ka status flow use karo. Admin status changes ko moderation/support ke liye rakho.
+For normal testing, use the seller and delivery partner status flows. Reserve admin status changes for moderation or support.
 
-## 7. Order statuses ka matlab
+## 7. Order status meanings
 
-Order status aur delivery status alag cheezein hain:
+Order status and delivery status are separate:
 
 | Order status | Meaning |
 | --- | --- |
-| `placed` | Customer ne order create kiya |
-| `confirmed` | Restaurant ne order accept kiya |
-| `preparing` | Restaurant food bana raha hai |
-| `ready_for_pickup` | Food pickup ke liye ready hai |
-| `out_for_delivery` | Delivery partner ne food pickup kar liya |
-| `delivered` | Order complete ho gaya |
-| `rejected` / `cancelled` / `failed` / `returned` | Order reject, cancel, fail, ya return hua |
+| `placed` | The customer created the order |
+| `confirmed` | The restaurant accepted the order |
+| `preparing` | The restaurant is preparing the food |
+| `ready_for_pickup` | The food is ready for pickup |
+| `out_for_delivery` | The delivery partner picked up the food |
+| `delivered` | The order is complete |
+| `rejected` / `cancelled` / `failed` / `returned` | The order was rejected, cancelled, failed, or returned |
 
-Delivery progress alag se `pending`, `assigned`, `accepted`, `reached_restaurant`, `picked_up`, `out_for_delivery`, `reached_customer`, aur `delivered` statuses rakhta hai.
+Delivery progress has its own statuses: `pending`, `assigned`, `accepted`, `reached_restaurant`, `picked_up`, `out_for_delivery`, `reached_customer`, and `delivered`.
 
-## 8. Pura order flow test karne ka tareeqa
+## 8. Test the complete order flow
 
-1. Agar clean test chahiye to customer ke roop mein login karke **Settings -> Local Testing Data** se pehle purana demo data clear karo.
-2. Customer ke roop mein `/login` kholo, `9876543210` se login karo, aur `123456` OTP enter karke restaurant se order place karo.
-3. Usi browser mein `/seller/login` kholo aur order ko **Accept -> Start preparing -> Ready for pickup** karo.
-4. `/delivery/login` kholo. Demo partner online/free ho to assigned order accept karo; warna dashboard ke Available Orders se order accept karo.
-5. Delivery status ko upar diye gaye sequence mein aage badhao aur final step mein 4+ digit demo value enter karke delivered mark karo.
-6. `/orders` par customer order wapas dekh kar delivered status verify karo.
+1. To start with clean test data, sign in as a customer and select **Settings -> Local Testing Data** to clear previous demo data.
+2. Open `/login` as a customer, sign in with `9876543210`, enter OTP `123456`, and place an order from a restaurant.
+3. In the same browser, open `/seller/login` and move the order through **Accept -> Start preparing -> Ready for pickup**.
+4. Open `/delivery/login`. If the demo partner is online and available, accept the assigned order; otherwise, accept it from Available Orders.
+5. Advance the delivery status in the sequence above. At the final step, enter any four-or-more-digit demo value and mark the order delivered.
+6. Open `/orders` as a customer and verify that the order is marked delivered.
 
-Agar order auto-assign nahi hota, check karo ki delivery partner online hai aur koi doosri active delivery usay busy nahi kar rahi.
+If automatic assignment does not happen, check that the delivery partner is online and does not already have another active delivery.
 
-## 9. Demo data aur reset
+## 9. Demo data and reset
 
-- Demo changes browser ke FeastGo storage mein save hote hain, isliye usi browser aur website origin par reload karne ke baad data rehta hai.
-- Live website aur `localhost` ka data alag hota hai. Alag browser/device par demo changes share nahi hote.
-- Customer login ke baad **Settings -> Local Testing Data -> Clear local testing data** se is browser ke FeastGo demo accounts, orders, cart, favorites, preferences, aur sign-in state reset kar sakte ho. Confirmation ke baad app reload hoti hai.
-- Reset sirf current website origin ke FeastGo data ko clear karta hai; doosri websites ka data nahi.
+- Demo changes are stored in FeastGo's browser storage, so they persist after reloads on the same browser and website origin.
+- Data on the live website and `localhost` are separate. Demo changes are not shared across browsers or devices.
+- After customer login, use **Settings -> Local Testing Data -> Clear local testing data** to reset FeastGo demo accounts, orders, cart, favorites, preferences, and sign-in state for the current browser. The app reloads after confirmation.
+- Reset only clears FeastGo data for the current website origin; it does not clear data for other websites.
 
-## 10. GitHub se live deploy
+## 10. Deploy from GitHub
 
-Frontend repo: [Rizwan8880/FeastGo-Frontend](https://github.com/Rizwan8880/FeastGo-Frontend)
+Frontend repository: [Rizwan8880/FeastGo-Frontend](https://github.com/Rizwan8880/FeastGo-Frontend)
 
-`main` branch par har push GitHub Actions workflow ko chalata hai. Workflow dependencies install karta hai, Angular production build banata hai (`dist/client/browser`), aur Cloudflare Pages project `feastgo-frontend` par deploy karta hai.
+Every push to the `main` branch runs a GitHub Actions workflow. It installs dependencies, creates an Angular production build (`dist/client/browser`), and deploys to the Cloudflare Pages project `feastgo-frontend`.
 
 Workflow file: [`.github/workflows/deploy-cloudflare-pages.yml`](../.github/workflows/deploy-cloudflare-pages.yml)
 
-## 11. Demo ki limitations
+## 11. Demo limitations
 
-- Login aur OTP demo-only hain; real identity verification nahi hoti.
-- Card, UPI, COD selection, refunds, notifications, chat, aur earnings real services se connected nahi hain.
-- Demo data browser mein rehta hai; doosre users/devices ke saath shared nahi hota.
-- Real customers ke liye launch karne se pehle backend/API, database, secure authentication, SMS/email provider, payment gateway, aur server-side authorization add karna hoga.
+- Login and OTP are for demo purposes; there is no real identity verification.
+- Card, UPI, COD selection, refunds, notifications, chat, and earnings are not connected to real services.
+- Demo data stays in the browser and is not shared with other users or devices.
+- Before launching for real customers, add a backend/API, database, secure authentication, SMS/email provider, payment gateway, and server-side authorization.

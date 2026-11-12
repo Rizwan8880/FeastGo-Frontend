@@ -28,6 +28,6 @@ The production-ready static site is generated in `dist/client/browser`.
 
 ## How FeastGo works
 
-See the [Hinglish workflow guide](docs/FEASTGO_WORKFLOW.md) for customer ordering, restaurant and delivery flows, admin tools, demo limitations, data reset, and deployment.
+See the [English workflow guide](docs/FEASTGO_WORKFLOW.md) for customer ordering, restaurant and delivery flows, admin tools, demo limitations, data reset, and deployment. The [Hindi/Hinglish guide is available to download](https://raw.githubusercontent.com/Rizwan8880/FeastGo-Frontend/main/docs/FEASTGO_WORKFLOW_HI.md).
 
 This repository contains only the frontend. The Express/MongoDB backend is not required or included.
